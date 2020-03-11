@@ -14,7 +14,7 @@ import Control.Monad (forM_)
 import Network.URI (URI(uriScheme), parseURI, isRelativeReference, relativeTo, isAbsoluteURI, parseRelativeReference, parseAbsoluteURI)
 import Data.Functor ((<&>))
 import Data.Maybe (mapMaybe)
-import Control.Concurrent.STM (TVar, STM, newTVarIO, atomically, readTVar, writeTVar)
+import Control.Concurrent.STM (TVar, STM, newTVarIO, atomically, readTVar, writeTVar, modifyTVar)
 import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue, readTQueue)
 import Control.Exception (handle, SomeException)
 import Control.Concurrent (newEmptyMVar, forkIO, threadDelay)
@@ -24,12 +24,14 @@ import Options.Commander (Named, type (&), Arg, Raw, command_, raw, arg, named, 
 
 data Explorer = Explorer
   { queue :: TQueue URI
-  , seen  :: TVar (Set URI) }
+  , seen  :: TVar (Set URI) 
+  , count :: TVar Int }
 
 newExplorerIO :: URI -> IO Explorer
 newExplorerIO startURI = do
   queue <- newTQueueIO
   seen <- newTVarIO Set.empty
+  count <- newTVarIO 0
   let explorer = Explorer{..}
   atomically (addURI explorer startURI)
   return explorer
@@ -40,6 +42,7 @@ addURI Explorer{..} uri = do
   if Set.member uri uris && (uriScheme uri == "https" || uriScheme uri == "http")
     then pure ()
     else do
+      modifyTVar count (+ 1)
       writeTVar seen (Set.insert uri uris)
       writeTQueue queue uri
 
@@ -47,7 +50,7 @@ readURI :: Explorer -> STM URI
 readURI Explorer{..} = readTQueue queue
 
 uriCount :: Explorer -> STM Int
-uriCount Explorer{..} = Set.size <$> readTVar seen
+uriCount Explorer{..} = readTVar count
 
 readURIs :: Explorer -> STM (Set URI)
 readURIs Explorer{..} = readTVar seen
@@ -80,10 +83,8 @@ go explorer i = do
   go explorer i
 
 uriPrinter :: Explorer -> IO ()
-uriPrinter Explorer{..} = atomically (readTVar seen) >>= go where
-  go :: Set URI -> IO ()
-  go stuff = do
-    stuff' <- atomically (readTVar seen)
-    traverse print (Set.toList (stuff' Set.\\ stuff))
-    threadDelay 10000000
-    go stuff'
+uriPrinter explorer = do
+  _ <- getChar
+  c <- atomically $ uriCount explorer
+  print c
+  uriPrinter explorer
