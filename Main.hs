@@ -9,24 +9,18 @@
 {-# LANGUAGE BlockArguments #-}
 module Main where
 
-import Text.HTML.Scalpel
-import Control.Monad.IO.Class
-import Control.Monad
-import Debug.Trace
-import Data.Char
-import System.Environment
-import Control.Applicative
-import Network.URI
-import Data.Functor
-import Data.Maybe
-import Debug.Trace
-import Control.Concurrent.STM
-import Control.Concurrent.STM.TQueue
-import Control.Exception
-import Control.Concurrent
+import Text.HTML.Scalpel (scrapeURL, attrs, tagSelector)
+import Control.Monad (forM_)
+import Network.URI (URI, parseURI, isRelativeReference, relativeTo, isAbsoluteURI, parseRelativeReference, parseAbsoluteURI)
+import Data.Functor ((<&>))
+import Data.Maybe (mapMaybe)
+import Control.Concurrent.STM (TVar, STM, newTVarIO, atomically, readTVar, writeTVar)
+import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue, readTQueue)
+import Control.Exception (handle, SomeException)
+import Control.Concurrent (newEmptyMVar, forkIO)
 import qualified Data.Set as Set
 import Data.Set (Set)
-import Options.Commander
+import Options.Commander (Named, type (&), Arg, Raw, command_, raw, arg, named, type (+), ProgramT((:+:)), usage)
 
 data Explorer = Explorer
   { queue :: TQueue URI
