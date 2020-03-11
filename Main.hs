@@ -11,7 +11,7 @@ module Main where
 
 import Text.HTML.Scalpel (scrapeURL, attrs, tagSelector)
 import Control.Monad (forM_)
-import Network.URI (URI, parseURI, isRelativeReference, relativeTo, isAbsoluteURI, parseRelativeReference, parseAbsoluteURI)
+import Network.URI (URI(uriScheme), parseURI, isRelativeReference, relativeTo, isAbsoluteURI, parseRelativeReference, parseAbsoluteURI)
 import Data.Functor ((<&>))
 import Data.Maybe (mapMaybe)
 import Control.Concurrent.STM (TVar, STM, newTVarIO, atomically, readTVar, writeTVar)
@@ -37,7 +37,7 @@ newExplorerIO startURI = do
 addURI :: Explorer -> URI -> STM ()
 addURI Explorer{..} uri = do
   uris <- readTVar seen
-  if Set.member uri uris 
+  if Set.member uri uris && (uriScheme uri == "https" || uriScheme uri == "http")
     then pure ()
     else do
       writeTVar seen (Set.insert uri uris)
