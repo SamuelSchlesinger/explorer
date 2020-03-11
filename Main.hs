@@ -17,7 +17,7 @@ import Data.Maybe (mapMaybe)
 import Control.Concurrent.STM (TVar, STM, newTVarIO, atomically, readTVar, writeTVar)
 import Control.Concurrent.STM.TQueue (TQueue, newTQueueIO, writeTQueue, readTQueue)
 import Control.Exception (handle, SomeException)
-import Control.Concurrent (newEmptyMVar, forkIO)
+import Control.Concurrent (newEmptyMVar, forkIO, threadDelay)
 import qualified Data.Set as Set
 import Data.Set (Set)
 import Options.Commander (Named, type (&), Arg, Raw, command_, raw, arg, named, type (+), ProgramT((:+:)), usage)
@@ -60,17 +60,11 @@ main = command_ $ named @"explorer" (arg @"where-to-start" (raw . entry)) :+: us
 entry :: String -> IO ()
 entry start = do
   let startURI = maybe (error "Could not parse start URI") id (parseURI start)
+  print startURI
   x <- newEmptyMVar
   explorer <- newExplorerIO startURI
   sequence_ [ forkIO (go explorer i) | i <- [1..15] ]
-  waitForInput explorer
-
-waitForInput :: Explorer -> IO ()
-waitForInput explorer = do
-  _ <- getChar
-  (Set.toList -> uris) <- atomically (readURIs explorer)
-  traverse print uris
-  print (length uris)
+  uriPrinter explorer
 
 perhapsRelativeTo :: URI -> String -> Maybe URI
 perhapsRelativeTo startURI path
@@ -84,3 +78,12 @@ go explorer i = do
   (maybe [] id -> paths) <- (\(_ :: SomeException) -> pure (Just [])) `handle` scrapeURL (show startURI) (mapMaybe (perhapsRelativeTo startURI) <$> attrs "href" (tagSelector "a"))
   atomically $ forM_ paths (addURI explorer)
   go explorer i
+
+uriPrinter :: Explorer -> IO ()
+uriPrinter Explorer{..} = atomically (readTVar seen) >>= go where
+  go :: Set URI -> IO ()
+  go stuff = do
+    stuff' <- atomically (readTVar seen)
+    traverse print (Set.toList (stuff' Set.\\ stuff))
+    threadDelay 10000000
+    go stuff'
